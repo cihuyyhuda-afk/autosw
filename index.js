@@ -1,5 +1,5 @@
-const fetch = require('node-fetch');
-const cron = require('node-cron');
+// File: index.js
+const logs = []; // Untuk menyimpan log
 
 // Fungsi untuk mendapatkan waktu WIB
 function getWIBTime() {
@@ -14,7 +14,7 @@ function getWIBTime() {
 }
 
 // Fungsi untuk mengirim request fetch
-function sendFetchRequest() {
+async function sendFetchRequest() {
   const caption = `Waktu sekarang: ${getWIBTime()} WIB`;
 
   const options = {
@@ -31,14 +31,51 @@ function sendFetchRequest() {
     }),
   };
 
-  fetch('https://gate.whapi.cloud/stories/send/text', options)
-    .then((res) => res.json())
-    .then((res) => console.log('Success:', res))
-    .catch((err) => console.error('Error:', err));
+  try {
+    const res = await fetch('https://gate.whapi.cloud/stories/send/text', options);
+    const data = await res.json();
+    logToPage(`Success: ${JSON.stringify(data)}`);
+  } catch (err) {
+    logToPage(`Error: ${err}`);
+  }
 }
 
-// Menjadwalkan fetch untuk dijalankan setiap jam pada menit 00
-cron.schedule('0 * * * *', () => {
-  console.log('Fetching at:', new Date().toLocaleString());
-  sendFetchRequest();
+// Fungsi untuk menambahkan log ke array logs
+function logToPage(message) {
+  logs.push(`${new Date().toLocaleString()}: ${message}`);
+  if (logs.length > 10) {
+    logs.shift(); // Hanya simpan 10 log terbaru
+  }
+}
+
+// Cron Trigger - setiap jam pada menit 00
+addEventListener('scheduled', event => {
+  event.waitUntil(sendFetchRequest());
 });
+
+// Menampilkan log ketika ada permintaan HTTP
+addEventListener('fetch', event => {
+  event.respondWith(handleRequest(event.request));
+});
+
+async function handleRequest(request) {
+  return new Response(`
+    <html>
+      <head>
+        <title>Log Fetch API</title>
+        <style>
+          body { font-family: Arial, sans-serif; background: #2c3e50; color: #fff; padding: 20px; }
+          #log { background: #34495e; padding: 10px; border-radius: 5px; height: 300px; overflow-y: scroll; }
+        </style>
+      </head>
+      <body>
+        <h1>Log Fetch API</h1>
+        <div id="log">
+          ${logs.map(log => `<p>${log}</p>`).join('')}
+        </div>
+      </body>
+    </html>
+  `, {
+    headers: { 'Content-Type': 'text/html' },
+  });
+}
